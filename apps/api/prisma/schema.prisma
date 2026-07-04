@@ -1,0 +1,396 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  ASSIGNED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum AccountType {
+  REGULAR
+  IRONMAN
+  HARDCORE_IRONMAN
+  ULTIMATE_IRONMAN
+  GROUP_IRONMAN
+  FRESH_START
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAYPAL
+  CRYPTO
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING_REPLY
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AnnouncementType {
+  INFO
+  WARNING
+  SUCCESS
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  username         String
+  passwordHash     String
+  role             UserRole @default(CUSTOMER)
+  avatar           String?
+  googleId         String?
+  discordId        String?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean  @default(false)
+  emailVerified    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orders       Order[]         @relation("CustomerOrders")
+  assignedJobs Order[]         @relation("StaffJobs")
+  tickets      Ticket[]
+  messages     TicketMessage[]
+
+  // Live Chat Relations
+  chatSessions     ChatSession[]
+  assignedChats    ChatSession[] @relation("AssignedChats")
+  sentChatMessages ChatMessage[]
+
+  payments  Payment[]
+  blogPosts BlogPost[]
+  auditLogs AuditLog[]
+}
+
+model Order {
+  id                  String      @id @default(cuid())
+  userId              String
+  serviceId           String
+  serviceType         String // SKILL, BOSS, QUEST, MINIGAME
+  accountType         AccountType @default(REGULAR)
+  currentLevel        Int?
+  targetLevel         Int?
+  currentXp           Int?
+  targetXp            Int?
+  bossKillCount       Int?
+  minigamePoints      Int?
+  status              OrderStatus @default(PENDING)
+  totalPrice          Float
+  expressPriority     Boolean     @default(false)
+  notes               String?
+  vpnRegion           String?
+  humanOnly           Boolean     @default(true)
+  noAutomation        Boolean     @default(true)
+  progressScreenshots Boolean     @default(true)
+  schedulePref        String?
+  assignedStaffId     String?
+  couponId            String?
+  completedAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  user     User      @relation("CustomerOrders", fields: [userId], references: [id])
+  service  Service   @relation(fields: [serviceId], references: [id])
+  staff    User?     @relation("StaffJobs", fields: [assignedStaffId], references: [id])
+  coupon   Coupon?   @relation(fields: [couponId], references: [id])
+  payments Payment[]
+  reviews  Review[]
+}
+
+model Service {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  description      String
+  shortDescription String
+  categoryId       String
+  image            String?
+  basePrice        Float
+  pricePerLevel    Float?
+  pricePerKc       Float?
+  pricePerHour     Float?
+  pricePerPoint    Float?
+  estimatedTime    String
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  seoTitle         String?
+  seoDescription   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
+  orders   Order[]
+}
+
+model ServiceCategory {
+  id          String @id @default(cuid())
+  name        String
+  slug        String @unique
+  description String
+  icon        String
+  sortOrder   Int    @default(0)
+
+  services Service[]
+}
+
+model Ticket {
+  id              String         @id @default(cuid())
+  userId          String
+  assignedStaffId String?
+  department      String
+  subject         String
+  status          TicketStatus   @default(OPEN)
+  priority        TicketPriority @default(LOW)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id])
+  messages TicketMessage[]
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String
+  message     String
+  isInternal  Boolean  @default(false)
+  attachments Json?
+  createdAt   DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model ChatSession {
+  id        String    @id @default(cuid())
+  userId    String?
+  visitorId String?
+  staffId   String?
+  status    String    @default("AI_HANDLING") // AI_HANDLING, WAITING_FOR_AGENT, ADMIN_HANDLING, CLOSED
+  rating    Int?
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+
+  user     User?         @relation(fields: [userId], references: [id])
+  visitor  Visitor?      @relation(fields: [visitorId], references: [id])
+  staff    User?         @relation("AssignedChats", fields: [staffId], references: [id])
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id          String    @id @default(cuid())
+  sessionId   String
+  senderId    String?
+  senderType  String    @default("VISITOR") // VISITOR, AI, ADMIN, SYSTEM
+  message     String
+  attachments Json?
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id])
+  sender  User?       @relation(fields: [senderId], references: [id])
+}
+
+model Visitor {
+  id          String   @id @default(cuid())
+  ipAddress   String?
+  country     String?
+  browser     String?
+  device      String?
+  os          String?
+  referrer    String?
+  currentPage String?
+  timeOnSite  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chatSessions ChatSession[]
+  leads        Lead[]
+}
+
+model Lead {
+  id            String   @id @default(cuid())
+  visitorId     String?
+  discord       String?
+  email         String?
+  contactMethod String   @default("DISCORD")
+  notes         String?
+  status        String   @default("NEW") // NEW, CONTACTED, CONVERTED, DEAD
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  visitor Visitor? @relation(fields: [visitorId], references: [id])
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  category  String
+  title     String
+  content   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  orderId    String
+  rating     Int
+  comment    String
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Coupon {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  type      CouponType @default(FIXED)
+  value     Float
+  minOrder  Float      @default(0)
+  maxUses   Int?
+  usedCount Int        @default(0)
+  expiresAt DateTime?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  orders Order[]
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String
+  userId        String
+  method        PaymentMethod
+  amount        Float
+  currency      String        @default("USD")
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Page {
+  id             String   @id @default(cuid())
+  title          String
+  slug           String   @unique
+  content        String
+  seoTitle       String?
+  seoDescription String?
+  isPublished    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model BlogPost {
+  id             String   @id @default(cuid())
+  title          String
+  slug           String   @unique
+  content        String
+  excerpt        String
+  featuredImage  String?
+  authorId       String
+  isPublished    Boolean  @default(true)
+  seoTitle       String?
+  seoDescription String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id])
+}
+
+model FAQ {
+  id        String  @id @default(cuid())
+  question  String
+  answer    String
+  category  String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
+model SiteSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  type  String @default("STRING")
+}
+
+model Announcement {
+  id       String           @id @default(cuid())
+  message  String
+  type     AnnouncementType @default(INFO)
+  isActive Boolean          @default(true)
+  startsAt DateTime?
+  endsAt   DateTime?
+}

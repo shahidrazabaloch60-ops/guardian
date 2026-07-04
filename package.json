@@ -1,0 +1,27 @@
+{
+  "name": "guardianrs",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:web": "pnpm --filter @guardianrs/web dev",
+    "dev:api": "pnpm --filter @guardianrs/api dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "db:generate": "pnpm --filter @guardianrs/api exec prisma generate",
+    "db:migrate": "pnpm --filter @guardianrs/api exec prisma migrate dev",
+    "db:push": "pnpm --filter @guardianrs/api exec prisma db push",
+    "db:seed": "pnpm --filter @guardianrs/api exec prisma db seed",
+    "db:studio": "pnpm --filter @guardianrs/api prisma studio",
+    "clean": "turbo clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "rimraf": "^6.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

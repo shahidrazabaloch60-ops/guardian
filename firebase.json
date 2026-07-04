@@ -1,0 +1,33 @@
+{
+  "functions": {
+    "source": "apps/api",
+    "codebase": "api",
+    "ignore": [
+      "node_modules",
+      ".turbo",
+      "dist",
+      "Dockerfile"
+    ]
+  },
+  "hosting": {
+    "source": "apps/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1"
+    },
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
+      {
+        "source": "/socket.io/**",
+        "function": "api"
+      }
+    ]
+  }
+}
