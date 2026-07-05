@@ -473,7 +473,7 @@ export const adminTakeover = async (req: Request, res: Response, next: NextFunct
  * POST /chat/admin/sessions/:id/send
  * Admin send message.
  */
-export const adminSend = async (req: Request, res: Response, next: NextFunction) => {
+export const adminSend = async (req: any, res: any, next: any) => {
   try {
     const { userId } = req.user!;
     const id = req.params.id as string;

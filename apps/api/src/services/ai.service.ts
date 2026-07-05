@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { prisma } from '../lib/prisma';
-import { ChatMessage } from '@prisma/client';
+
 
 // Initialize OpenAI conditionally
 let openai: OpenAI | null = null;
@@ -34,7 +34,7 @@ export class AIService {
       });
 
       // 2. Format history for OpenAI
-      const messages: any[] = chatHistory.map(msg => ({
+      const messages: any[] = chatHistory.map((msg: any) => ({
         role: msg.senderType === 'VISITOR' ? 'user' : 'assistant',
         content: msg.message,
       }));
@@ -48,7 +48,7 @@ export class AIService {
         take: 50,
       });
 
-      const serviceContext = services.map(s => `- ${s.name}: Starts at $${s.basePrice} (${s.estimatedTime})`).join('\n');
+      const serviceContext = services.map((s: any) => `- ${s.name}: Starts at $${s.basePrice} (${s.estimatedTime})`).join('\n');
 
       const fullSystemPrompt = `
 ${SYSTEM_PROMPT}
