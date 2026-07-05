@@ -39,12 +39,12 @@ app.use(cors({
   origin: (origin, callback) => callback(null, true),
   credentials: true,
 }));
-app.use(compression());
+app.use(compression() as any);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(hpp());
+app.use(hpp() as any);
 
 // Health Check API
 app.get('/health', (req, res) => {
