@@ -51,14 +51,20 @@ app.get('/health', (req, res) => {
   res.json({ success: true, status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-import { ChatController } from './controllers/chat.controller';
+import {
+  getActiveSessions,
+  getSessionMessages,
+  getActiveVisitors,
+  getLeads,
+  deleteSession
+} from './controllers/chatController';
 
 // Chat API Routes (In production these should be protected by auth middleware)
-app.get('/api/chat/sessions', ChatController.getActiveSessions);
-app.get('/api/chat/sessions/:sessionId/messages', ChatController.getSessionMessages);
-app.get('/api/chat/visitors', ChatController.getActiveVisitors);
-app.get('/api/chat/leads', ChatController.getLeads);
-app.delete('/api/chat/sessions/:sessionId', ChatController.deleteSession);
+app.get('/api/chat/sessions', getActiveSessions);
+app.get('/api/chat/sessions/:sessionId/messages', getSessionMessages);
+app.get('/api/chat/visitors', getActiveVisitors);
+app.get('/api/chat/leads', getLeads);
+app.delete('/api/chat/sessions/:sessionId', deleteSession);
 
 import { SocketService } from './services/socket.service';
 

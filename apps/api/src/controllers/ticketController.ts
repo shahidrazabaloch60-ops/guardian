@@ -114,7 +114,7 @@ export const getTickets = async (req: Request, res: Response, next: NextFunction
 export const getTicketById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, role } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
@@ -158,7 +158,7 @@ export const getTicketById = async (req: Request, res: Response, next: NextFunct
 export const replyToTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, role } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { message } = req.body;
 
     const ticket = await prisma.ticket.findUnique({
@@ -217,7 +217,7 @@ export const replyToTicket = async (req: Request, res: Response, next: NextFunct
  */
 export const assignTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { staffId } = req.body;
 
     const ticket = await prisma.ticket.findUnique({
@@ -244,7 +244,7 @@ export const assignTicket = async (req: Request, res: Response, next: NextFuncti
 
     const updatedTicket = await prisma.ticket.update({
       where: { id },
-      data: { assignedToId: staffId },
+      data: { assignedStaffId: staffId },
       include: {
         user: {
           select: { id: true, username: true, avatar: true },
@@ -269,7 +269,7 @@ export const assignTicket = async (req: Request, res: Response, next: NextFuncti
 export const closeTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, role } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },

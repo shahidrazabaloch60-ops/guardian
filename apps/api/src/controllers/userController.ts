@@ -80,7 +80,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
         username: true,
         avatar: true,
         role: true,
-        isVerified: true,
+        emailVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -181,7 +181,7 @@ export const getNotifications = async (req: Request, res: Response, next: NextFu
 export const markNotificationRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const notification = await prisma.notification.findUnique({
       where: { id },

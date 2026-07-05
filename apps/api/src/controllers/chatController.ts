@@ -314,6 +314,102 @@ export const visitorPoll = async (req: Request, res: Response, next: NextFunctio
 };
 
 /**
+ * GET /chat/admin/active-sessions
+ * Get all active sessions for admin.
+ */
+export const getActiveSessions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessions = await prisma.chatSession.findMany({
+      where: { status: { not: 'CLOSED' } },
+      include: {
+        visitor: true,
+        user: { select: { username: true, email: true, avatar: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(sessions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /chat/admin/sessions/:sessionId/messages
+ * Get all messages for a session.
+ */
+export const getSessionMessages = async (req: Request, res: Response, next: NextFunction) => {
+  const { sessionId } = req.params;
+  try {
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        sender: { select: { username: true, avatar: true, role: true } }
+      }
+    });
+    res.json(messages);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /chat/admin/visitors
+ * Get active visitors.
+ */
+export const getActiveVisitors = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const visitors = await prisma.visitor.findMany({
+      where: { updatedAt: { gte: thirtyMinutesAgo } },
+      orderBy: { updatedAt: 'desc' }
+    });
+    res.json(visitors);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /chat/admin/leads
+ * Get leads.
+ */
+export const getLeads = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const leads = await prisma.lead.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { visitor: true }
+    });
+    res.json(leads);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /chat/admin/sessions/:sessionId
+ * Delete chat session.
+ */
+export const deleteSession = async (req: Request, res: Response, next: NextFunction) => {
+  const { sessionId } = req.params;
+  try {
+    await prisma.chatMessage.deleteMany({
+      where: { sessionId }
+    });
+    await prisma.chatSession.delete({
+      where: { id: sessionId }
+    });
+    res.json({ success: true, message: 'Chat session deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * POST /chat/admin/sessions/:id/takeover
  * Admin takeover session.
  */

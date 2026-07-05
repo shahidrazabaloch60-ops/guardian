@@ -89,7 +89,7 @@ export const getAllServices = async (req: Request, res: Response, next: NextFunc
 // GET /services/:slug
 export const getServiceBySlug = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slug } = req.params;
+    const slug = req.params.slug as string;
 
     const service = await prisma.service.findUnique({
       where: { slug },
@@ -116,7 +116,7 @@ export const getServicesByCategory = async (req: Request, res: Response, next: N
     const page = Math.max(1, parseInt(req.query.page as string) || DEFAULT_PAGE);
     const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(req.query.limit as string) || DEFAULT_LIMIT));
 
-    const category = await prisma.category.findUnique({
+    const category = await prisma.serviceCategory.findUnique({
       where: { slug: categorySlug },
     });
 

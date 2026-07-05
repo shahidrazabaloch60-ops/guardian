@@ -14,7 +14,7 @@ export const createStripeIntent = async (req: Request, res: Response, next: Next
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { payment: true },
+      include: { payments: true },
     });
 
     if (!order) {
@@ -40,20 +40,30 @@ export const createStripeIntent = async (req: Request, res: Response, next: Next
     );
 
     // Create or update payment record
-    await prisma.payment.upsert({
-      where: { orderId: order.id },
-      create: {
-        orderId: order.id,
-        amount: order.totalPrice,
-        method: 'STRIPE',
-        status: 'PENDING',
-        paymentIntentId: paymentIntent.id,
-      },
-      update: {
-        paymentIntentId: paymentIntent.id,
-        status: 'PENDING',
-      },
+    const existingPayment = await prisma.payment.findFirst({
+      where: { orderId: order.id }
     });
+
+    if (existingPayment) {
+      await prisma.payment.update({
+        where: { id: existingPayment.id },
+        data: {
+          transactionId: paymentIntent.id,
+          status: 'PENDING',
+        },
+      });
+    } else {
+      await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          userId,
+          amount: order.totalPrice,
+          method: 'STRIPE',
+          status: 'PENDING',
+          transactionId: paymentIntent.id,
+        },
+      });
+    }
 
     res.json({
       success: true,
@@ -78,7 +88,7 @@ export const confirmPayment = async (req: Request, res: Response, next: NextFunc
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { payment: true },
+      include: { payments: true },
     });
 
     if (!order) {
@@ -89,20 +99,21 @@ export const confirmPayment = async (req: Request, res: Response, next: NextFunc
       throw new AppError('Not authorized to confirm this payment', 403);
     }
 
-    if (!order.payment) {
+    const payment = order.payments?.[0];
+
+    if (!payment) {
       throw new AppError('No payment record found for this order', 404);
     }
 
-    if (order.payment.paymentIntentId !== paymentIntentId) {
+    if (payment.transactionId !== paymentIntentId) {
       throw new AppError('Payment intent ID mismatch', 400);
     }
 
     // Update payment to completed
     await prisma.payment.update({
-      where: { id: order.payment.id },
+      where: { id: payment.id },
       data: {
         status: 'COMPLETED',
-        paidAt: new Date(),
       },
     });
 
@@ -110,7 +121,7 @@ export const confirmPayment = async (req: Request, res: Response, next: NextFunc
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: { status: 'PAID' },
-      include: { payment: true },
+      include: { payments: true },
     });
 
     res.json({
@@ -143,12 +154,11 @@ export const handleStripeWebhook = async (req: Request, res: Response, next: Nex
         const orderId = paymentIntent.metadata?.orderId;
 
         if (orderId) {
-          // Update payment status
+          // Update payment status using transactionId index
           await prisma.payment.updateMany({
-            where: { paymentIntentId: paymentIntent.id },
+            where: { transactionId: paymentIntent.id },
             data: {
               status: 'COMPLETED',
-              paidAt: new Date(),
             },
           });
 
@@ -165,18 +175,16 @@ export const handleStripeWebhook = async (req: Request, res: Response, next: Nex
         const paymentIntent = event.data.object as any;
 
         await prisma.payment.updateMany({
-          where: { paymentIntentId: paymentIntent.id },
+          where: { transactionId: paymentIntent.id },
           data: { status: 'FAILED' },
         });
         break;
       }
 
       default:
-        // Unhandled event type — log and acknowledge
         console.log(`Unhandled Stripe event type: ${event.type}`);
     }
 
-    // Always return 200 to acknowledge receipt
     res.json({ success: true, message: 'Webhook received' });
   } catch (error) {
     next(error);
@@ -190,11 +198,7 @@ export const handleStripeWebhook = async (req: Request, res: Response, next: Nex
 export const handlePayPalWebhook = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const event = req.body;
-
-    // Log the PayPal event for processing
     console.log('PayPal webhook event received:', JSON.stringify(event, null, 2));
-
-    // TODO: Implement PayPal event handling
 
     res.status(200).json({
       success: true,
@@ -230,20 +234,30 @@ export const handleCryptoPayment = async (req: Request, res: Response, next: Nex
       throw new AppError('Order is not in a payable state', 400);
     }
 
-    // Create or update payment record for crypto
-    const payment = await prisma.payment.upsert({
-      where: { orderId: order.id },
-      create: {
-        orderId: order.id,
-        amount: order.totalPrice,
-        method: 'CRYPTO',
-        status: 'PENDING',
-      },
-      update: {
-        method: 'CRYPTO',
-        status: 'PENDING',
-      },
+    const existingPayment = await prisma.payment.findFirst({
+      where: { orderId: order.id }
     });
+
+    let payment;
+    if (existingPayment) {
+      payment = await prisma.payment.update({
+        where: { id: existingPayment.id },
+        data: {
+          method: 'CRYPTO',
+          status: 'PENDING',
+        },
+      });
+    } else {
+      payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          userId,
+          amount: order.totalPrice,
+          method: 'CRYPTO',
+          status: 'PENDING',
+        },
+      });
+    }
 
     res.json({
       success: true,
