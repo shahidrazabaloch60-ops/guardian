@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "start": "node apps/api/dist/index.js",
+    "postinstall": "npm install --prefix apps/api && npm run build --prefix apps/api",
     "dev": "turbo dev",
     "dev:web": "pnpm --filter @guardianrs/web dev",
     "dev:api": "pnpm --filter @guardianrs/api dev",
