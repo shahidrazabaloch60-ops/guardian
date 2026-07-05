@@ -6,15 +6,31 @@ import {
   getSessions,
   getMessages,
   createSession,
+  visitorInit,
+  visitorSend,
+  visitorPoll,
+  adminTakeover,
+  adminSend,
 } from '../controllers/chatController';
 
 const router: Router = Router();
 
-// All routes require authentication
+// Public visitor routes
+router.post('/visitor/init', visitorInit);
+router.post('/visitor/send', visitorSend);
+router.get('/visitor/poll', visitorPoll);
+
+// All routes below require authentication
 router.use(authenticate);
 
 // GET /sessions — Get all chat sessions for the current user
 router.get('/sessions', getSessions);
+
+// POST /sessions/:id/takeover — Admin takeover session
+router.post('/sessions/:id/takeover', adminTakeover);
+
+// POST /sessions/:id/send — Admin send message
+router.post('/sessions/:id/send', adminSend);
 
 // Validation schemas
 const getMessagesSchema = z.object({

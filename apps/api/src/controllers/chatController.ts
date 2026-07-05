@@ -169,3 +169,224 @@ export const createSession = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+/**
+ * POST /chat/visitor/init
+ * Initialize visitor chat session publicly.
+ */
+export const visitorInit = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { visitorId, url, browser, os } = req.body;
+    let visitor;
+
+    if (visitorId) {
+      visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+    }
+
+    if (!visitor) {
+      visitor = await prisma.visitor.create({
+        data: {
+          ipAddress: req.ip || 'Unknown',
+          browser: browser || 'Unknown',
+          os: os || 'Unknown',
+          currentPage: url || 'Unknown',
+        }
+      });
+    } else {
+      visitor = await prisma.visitor.update({
+        where: { id: visitor.id },
+        data: { currentPage: url, updatedAt: new Date() }
+      });
+    }
+
+    let session = await prisma.chatSession.findFirst({
+      where: { visitorId: visitor.id, status: { not: 'CLOSED' } },
+      include: { staff: true }
+    });
+
+    if (!session) {
+      session = await prisma.chatSession.create({
+        data: {
+          visitorId: visitor.id,
+          status: 'WAITING_FOR_AGENT'
+        },
+        include: { staff: true }
+      });
+
+      const welcomeSetting = await prisma.siteSetting.findUnique({
+        where: { key: 'chat_welcome_message' }
+      });
+      const welcomeMsgText = welcomeSetting?.value || "👋 Hi! Welcome to our OSRS boosting service. How can I help you today?";
+
+      await prisma.chatMessage.create({
+        data: {
+          sessionId: session.id,
+          senderType: 'AI',
+          message: welcomeMsgText
+        }
+      });
+    }
+
+    const history = await prisma.chatMessage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        visitorId: visitor.id,
+        sessionId: session.id,
+        history,
+        adminName: session.staff ? session.staff.username : null
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /chat/visitor/send
+ * Public visitor send message.
+ */
+export const visitorSend = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { visitorId, sessionId, message } = req.body;
+
+    const session = await prisma.chatSession.findFirst({
+      where: { id: sessionId, visitorId, status: { not: 'CLOSED' } }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+
+    const newMsg = await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        senderType: 'VISITOR',
+        message
+      }
+    });
+
+    res.json({
+      success: true,
+      data: newMsg
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /chat/visitor/poll
+ * Public visitor poll messages.
+ */
+export const visitorPoll = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { visitorId, sessionId } = req.query;
+
+    const session = await prisma.chatSession.findFirst({
+      where: { id: sessionId as string, visitorId: visitorId as string, status: { not: 'CLOSED' } },
+      include: { staff: true }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        messages,
+        adminName: session.staff ? session.staff.username : null
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /chat/admin/sessions/:id/takeover
+ * Admin takeover session.
+ */
+export const adminTakeover = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, username } = req.user!;
+    const { id } = req.params;
+
+    const session = await prisma.chatSession.findUnique({
+      where: { id }
+    });
+
+    if (!session) {
+      throw new AppError('Chat session not found', 404);
+    }
+
+    await prisma.chatSession.update({
+      where: { id },
+      data: {
+        status: 'ADMIN_HANDLING',
+        staffId: userId
+      }
+    });
+
+    const sysMsg = await prisma.chatMessage.create({
+      data: {
+        sessionId: id,
+        senderType: 'SYSTEM',
+        message: `${username} joined the conversation.`
+      }
+    });
+
+    res.json({
+      success: true,
+      data: sysMsg
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /chat/admin/sessions/:id/send
+ * Admin send message.
+ */
+export const adminSend = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.user!;
+    const { id } = req.params;
+    const { message } = req.body;
+
+    const session = await prisma.chatSession.findUnique({
+      where: { id }
+    });
+
+    if (!session) {
+      throw new AppError('Chat session not found', 404);
+    }
+
+    const newMsg = await prisma.chatMessage.create({
+      data: {
+        sessionId: id,
+        senderType: 'ADMIN',
+        senderId: userId,
+        message
+      }
+    });
+
+    res.json({
+      success: true,
+      data: newMsg
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
 import GlassCard from '../../../components/ui/GlassCard';
 import Button from '../../../components/ui/Button';
 import { useAuth } from '../../../hooks/useAuth';
@@ -42,7 +41,6 @@ if (typeof window !== 'undefined') {
 
 export default function LiveChatAdmin() {
   const { user } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -92,39 +90,69 @@ export default function LiveChatAdmin() {
     }
   };
 
+  // Poll active sessions every 3.5 seconds
   useEffect(() => {
-    // Connect Admin socket
-    const s = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-    });
-    
-    s.on('connect', () => {
-      s.emit('admin_join');
-    });
-
-    s.on('visitor_online', () => {
-      fetchSessions();
-    });
-
-    s.on('receive_message', (msg) => {
-      if (activeSessionRef.current && msg.sessionId === activeSessionRef.current.id) {
-        setMessages(prev => [...prev, msg]);
-      }
-      fetchSessions(); // update last message preview
-    });
-
-    setSocket(s);
     fetchSessions();
+    const interval = setInterval(() => {
+      fetchSessions();
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
 
-    return () => { s.disconnect(); };
+  const activeSessionIdRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    activeSessionIdRef.current = activeSession?.id || null;
+  }, [activeSession]);
+
+  const messagesLengthRef = React.useRef(0);
+  useEffect(() => {
+    messagesLengthRef.current = messages?.length || 0;
+  }, [messages]);
+
+  // Poll messages for active session every 3 seconds
+  useEffect(() => {
+    const pollMessages = async () => {
+      const sessionId = activeSessionIdRef.current;
+      if (!sessionId) return;
+      try {
+        const token = localStorage.getItem('guardianrs_token');
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${sessionId}/messages`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const result = await res.json();
+        if (result.success && result.data && result.data.messages) {
+          if (activeSessionIdRef.current === sessionId) {
+            const list = result.data.messages;
+            // Sort history in ascending order to display correctly (older first)
+            const sortedList = [...list].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            if (sortedList.length !== messagesLengthRef.current) {
+              setMessages(sortedList);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Admin Chat] Poll messages error:', err);
+      }
+    };
+
+    const interval = setInterval(pollMessages, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSessions = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions`);
-      const data = await res.json();
-      setSessions(data);
+      const token = localStorage.getItem('guardianrs_token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await res.json();
+      if (result.success && result.data) {
+        setSessions(result.data);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -133,9 +161,18 @@ export default function LiveChatAdmin() {
   const loadSession = async (session: ChatSession) => {
     setActiveSession(session);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${session.id}/messages`);
-      const data = await res.json();
-      setMessages(data);
+      const token = localStorage.getItem('guardianrs_token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${session.id}/messages`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await res.json();
+      if (result.success && result.data && result.data.messages) {
+        const list = result.data.messages;
+        const sortedList = [...list].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        setMessages(sortedList);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -143,23 +180,28 @@ export default function LiveChatAdmin() {
 
   const currentUser = user || { id: 'mock-admin-id', username: stableMockName, role: 'ADMIN' };
 
-  const handleTakeover = () => {
-    if (!socket || !activeSession || !currentUser) return;
-    socket.emit('admin_takeover', {
-      visitorId: activeSession.visitorId,
-      adminId: currentUser.id,
-      adminName: currentUser.username,
-    });
+  const handleTakeover = async () => {
+    if (!activeSession || !currentUser) return;
     
-    // Instantly update UI states locally
-    const updatedSession = { ...activeSession, status: 'ADMIN_HANDLING', staffId: currentUser.id };
-    setActiveSession(updatedSession);
-    setSessions(prev => prev.map(s => s.id === activeSession.id ? updatedSession : s));
-    
-    // Sync with database after a slight delay
-    setTimeout(() => {
-      fetchSessions();
-    }, 300);
+    try {
+      const token = localStorage.getItem('guardianrs_token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${activeSession.id}/takeover`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await res.json();
+      if (result.success) {
+        const updatedSession = { ...activeSession, status: 'ADMIN_HANDLING', staffId: currentUser.id };
+        setActiveSession(updatedSession);
+        setSessions(prev => prev.map(s => s.id === activeSession.id ? updatedSession : s));
+        fetchSessions();
+      }
+    } catch (err) {
+      console.error('[Admin Takeover] failed:', err);
+    }
   };
 
   const handleDeleteSession = async () => {
@@ -168,8 +210,12 @@ export default function LiveChatAdmin() {
     if (!confirmDelete) return;
 
     try {
+      const token = localStorage.getItem('guardianrs_token');
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${activeSession.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       const data = await res.json();
       if (data.success) {
@@ -185,18 +231,43 @@ export default function LiveChatAdmin() {
     }
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !socket || !activeSession || !currentUser) return;
-    
-    socket.emit('admin_send_message', {
-      visitorId: activeSession.visitorId,
-      adminId: currentUser.id,
-      adminName: currentUser.username,
-      message: input
-    });
-    
+    if (!input.trim() || !activeSession || !currentUser) return;
+
+    const messageText = input;
     setInput('');
+
+    // Optimistic UI updates
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
+      sessionId: activeSession.id,
+      senderType: 'ADMIN',
+      senderId: currentUser.id,
+      message: messageText,
+      createdAt: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    try {
+      const token = localStorage.getItem('guardianrs_token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/sessions/${activeSession.id}/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message: messageText })
+      });
+      const result = await res.json();
+      if (result.success && result.data) {
+        setMessages(prev => prev.map(msg => msg.id === tempId ? result.data : msg));
+        fetchSessions();
+      }
+    } catch (err) {
+      console.error('[Admin Send] failed:', err);
+    }
   };
 
   return (
