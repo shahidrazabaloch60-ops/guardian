@@ -342,7 +342,7 @@ export const getActiveSessions = async (req: Request, res: Response, next: NextF
  * Get all messages for a session.
  */
 export const getSessionMessages = async (req: Request, res: Response, next: NextFunction) => {
-  const { sessionId } = req.params;
+  const sessionId = req.params.sessionId as string;
   try {
     const messages = await prisma.chatMessage.findMany({
       where: { sessionId },
@@ -395,7 +395,7 @@ export const getLeads = async (req: Request, res: Response, next: NextFunction) 
  * Delete chat session.
  */
 export const deleteSession = async (req: Request, res: Response, next: NextFunction) => {
-  const { sessionId } = req.params;
+  const sessionId = req.params.sessionId as string;
   try {
     await prisma.chatMessage.deleteMany({
       where: { sessionId }
@@ -415,8 +415,8 @@ export const deleteSession = async (req: Request, res: Response, next: NextFunct
  */
 export const adminTakeover = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { userId, username } = req.user!;
-    const { id } = req.params;
+    const userId = req.user!.userId;
+    const id = req.params.id as string;
 
     const session = await prisma.chatSession.findUnique({
       where: { id }
@@ -433,6 +433,12 @@ export const adminTakeover = async (req: Request, res: Response, next: NextFunct
         staffId: userId
       }
     });
+
+    const adminUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true }
+    });
+    const username = adminUser?.username || 'Admin';
 
     const sysMsg = await prisma.chatMessage.create({
       data: {
@@ -458,7 +464,7 @@ export const adminTakeover = async (req: Request, res: Response, next: NextFunct
 export const adminSend = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { message } = req.body;
 
     const session = await prisma.chatSession.findUnique({
