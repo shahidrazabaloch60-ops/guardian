@@ -71,11 +71,11 @@ import { prisma } from './lib/prisma';
 prisma.chatSession.updateMany({
   where: { status: 'AI_HANDLING' },
   data: { status: 'WAITING_FOR_AGENT' }
-}).then(res => {
+}).then((res: any) => {
   if (res.count > 0) {
     console.log(`[GuardianRS API] Migrated ${res.count} legacy AI sessions to WAITING_FOR_AGENT.`);
   }
-}).catch(err => console.error('[Startup Migration Error]', err));
+}).catch((err: any) => console.error('[Startup Migration Error]', err));
 
 // Seed default site settings if they don't exist
 const defaultBadges = [
@@ -85,7 +85,7 @@ const defaultBadges = [
   { title: '24/7 Live Support', icon: '💬', desc: 'Here to help you anytime' }
 ];
 
-prisma.siteSetting.findUnique({ where: { key: 'trust_badges' } }).then(async (setting) => {
+prisma.siteSetting.findUnique({ where: { key: 'trust_badges' } }).then(async (setting: any) => {
   if (!setting) {
     await prisma.siteSetting.create({
       data: {
@@ -96,7 +96,7 @@ prisma.siteSetting.findUnique({ where: { key: 'trust_badges' } }).then(async (se
     });
     console.log('[GuardianRS API] Seeded default trust badges setting.');
   }
-}).catch(err => console.error('[Startup Settings Seed Error]', err));
+}).catch((err: any) => console.error('[Startup Settings Seed Error]', err));
 
 // Settings Routes
 app.get('/api/settings/trust-badges', async (req, res) => {
@@ -156,7 +156,7 @@ prisma.siteSetting.upsert({
   }
 }).then(() => {
   console.log('[GuardianRS API] Seeded/Updated default hero announcement setting.');
-}).catch(err => console.error('[Startup Settings Announcement Seed Error]', err));
+}).catch((err: any) => console.error('[Startup Settings Announcement Seed Error]', err));
 
 app.get('/api/settings/hero-announcement', async (req, res) => {
   try {
@@ -194,7 +194,7 @@ app.post('/api/settings/hero-announcement', async (req, res) => {
 
 const defaultWelcomeMessage = "👋 Hi! Welcome to our OSRS boosting service. How can I help you today?";
 
-prisma.siteSetting.findUnique({ where: { key: 'chat_welcome_message' } }).then(async (setting) => {
+prisma.siteSetting.findUnique({ where: { key: 'chat_welcome_message' } }).then(async (setting: any) => {
   if (!setting) {
     await prisma.siteSetting.create({
       data: {
@@ -205,7 +205,7 @@ prisma.siteSetting.findUnique({ where: { key: 'chat_welcome_message' } }).then(a
     });
     console.log('[GuardianRS API] Seeded default chat welcome message setting.');
   }
-}).catch(err => console.error('[Startup Settings Welcome Message Seed Error]', err));
+}).catch((err: any) => console.error('[Startup Settings Welcome Message Seed Error]', err));
 
 app.get('/api/settings/chat-welcome-message', async (req, res) => {
   try {
