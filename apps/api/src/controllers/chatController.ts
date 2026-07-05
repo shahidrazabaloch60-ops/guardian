@@ -3,6 +3,14 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
 /**
+ * Helper utility to safely narrow parameters that might be arrays to a single string value.
+ * If the value is an array, it returns the first element; otherwise returns the value as-is.
+ */
+function toSingleString(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
  * GET /chat/sessions
  * Get all chat sessions where the current user is a participant (userId or staffId).
  */
@@ -64,10 +72,14 @@ export const getSessions = async (req: Request, res: Response, next: NextFunctio
 export const getMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.user!;
-    const id = req.params.id as string;
+    const id = toSingleString(req.params.id);
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 50;
     const skip = (page - 1) * limit;
+
+    if (!id) {
+      throw new AppError('Invalid session ID query parameter', 400);
+    }
 
     // Find session and verify access
     const session = await prisma.chatSession.findUnique({
