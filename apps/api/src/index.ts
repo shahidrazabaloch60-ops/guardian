@@ -265,3 +265,4 @@ export const api = functions.https.onRequest((req, res) => {
 });
 
 export { app, httpServer, io };
+export default app;
