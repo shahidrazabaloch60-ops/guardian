@@ -30,7 +30,7 @@ export const getSessions = async (req: Request, res: Response, next: NextFunctio
           take: 1,
           select: {
             id: true,
-            content: true,
+            message: true,
             senderId: true,
             createdAt: true,
             isRead: true,
@@ -64,7 +64,7 @@ export const getSessions = async (req: Request, res: Response, next: NextFunctio
 export const getMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.user!;
-    const { id } = req.params;
+    const id = req.params.id as string;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 50;
     const skip = (page - 1) * limit;
